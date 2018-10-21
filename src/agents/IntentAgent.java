@@ -2,7 +2,8 @@ package agents;
 
 import hanabAI.*;
 import java.util.Arrays;
-import java.util.ArrayDeque;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * An interface for representing the strategy of a player in Hanabi
@@ -15,7 +16,6 @@ public class IntentAgent implements Agent {
 
   private static int handSize;
   private static int numPlayers;
-  private static int board;
 
   private int[][] cardsAvaliable;
   private Player[] players;
@@ -72,13 +72,27 @@ public class IntentAgent implements Agent {
     private HintType type;
     private int rank;
     private Colour colour;
+
+    public Hint(int rank, boolean[] targets, Player hinter) {
+      type = HintType.RANK;
+      this.rank = rank;
+      this.targets = targets;
+      this.hinter = hinter;
+    }
+
+    public Hint(Colour colour, boolean[] targets, Player hinter) {
+      type = HintType.COLOUR;
+      this.colour = colour;
+      this.targets = targets;
+      this.hinter = hinter;
+    }
   }
 
   class Player {
     private int id;
     private String name;
     private boolean trustworthy = true;
-    private boolean intentional = true;
+    private double intentional = 0.5;
     private Card[] hand;
     private MindState[] mind;
     private int[][] potential;
@@ -104,7 +118,7 @@ public class IntentAgent implements Agent {
       }
 
       // init hint history
-      hints = new ArrayDeque<Hint>();
+      hints = new ArrayList<Hint>();
     }
 
     private void removeFromMind(Card card) {
@@ -175,7 +189,11 @@ public class IntentAgent implements Agent {
       id = (self.id + move) % numPlayers;
       actor = players[id];
       action = currentState.getPreviousAction(actor.id);
-      applyAction(action, actor);
+      try {
+        applyAction(action, actor);
+      } catch (IllegalActionException e) {
+        System.err.println(e);
+      }
     }
   }
 
@@ -193,8 +211,8 @@ public class IntentAgent implements Agent {
 
     // compare firework stacks to confirm successful play
     for (Colour colour : Colour.values()) {
-      prev = result.getPreviousState().getFireworks().peek();
-      curr = result.getFireworks().peek();
+      prev = result.getPreviousState().getFirework(colour).peek();
+      curr = result.getFirework(colour).peek();
       if (prev != curr) {
         return curr;
       }
@@ -204,7 +222,7 @@ public class IntentAgent implements Agent {
     return result.getDiscards().peek();
   }
 
-  private void applyDiscard(Action action, Player actor, State result) {
+  private void applyDiscard(Action action, Player actor, State result) throws IllegalActionException {
     int handPos = action.getCard();
     Card card = result.getDiscards().peek();
 
@@ -212,8 +230,8 @@ public class IntentAgent implements Agent {
     replaceCard(actor, card, handPos, result);
   }
 
-  private void applyPlay(Action action, Player actor, State result) {
-    int handPost = action.getCard();
+  private void applyPlay(Action action, Player actor, State result) throws IllegalActionException {
+    int handPos = action.getCard();
     Card card = getCardPlayed(result);
 
     // pickup if avaliable
@@ -250,7 +268,43 @@ public class IntentAgent implements Agent {
     }
   }
 
-  private void applyAction(Action action, Player actor) {
+  private void applyColourHint(Action action, Player actor, State result) throws IllegalActionException{
+    Hint hint = new Hint(action.getColour(), action.getHintedCards(), actor);
+    Player hintee = players[action.getHintReciever()]
+    int[] board = checkBoard(result);
+
+    // discard hints from untrustworthy sources
+    if (!actor.trustworthy) return;
+
+    // assume hints directed at agent are valid
+    if (hintee == self) {
+      self.hints.add(hint);
+    } else {
+      // check validity
+      for (int i = 0; i < hint.targets.length; i++) {
+        if ((hint.targets[i]) && (hintee.hand[i].getColour() != hint.colour)) {
+          // hint invalid, source untrustworthy
+          actor.intentional = 0.0;
+          actor.trustworthy = false;
+          return;
+        }
+      }
+      // rate intentionality of hinter
+      for (int i = 0; i < hint.targets.length; i++) {
+        if ((hint.targets[i]) && (hintee.hand[i].rank == board[hint.colour.ordinal()] + 1)) {
+          actor.intentional += 1.0;
+          actor.intentional /= 2.0;
+        } else if ()
+
+      }
+    }
+  }
+
+  private void applyRankHint(Action action, Player actor, State result) throws IllegalActionException {
+
+  }
+
+  private void applyAction(Action action, Player actor) throws IllegalActionException {
     int actionOrder = currentOrder - numPlayers + actor.id;
     State result = getPastStateByOrder(actionOrder);
 
@@ -278,6 +332,16 @@ public class IntentAgent implements Agent {
     return "IntentAgent";
   }
 
+  private int[] checkBoard(State state) {
+    int[] board = new int[NUM_COLOURS];
+
+    for (Colour color : Colours.values()) {
+      board[color.ordinal()] = state.getFirework(color).peek();
+    }
+
+    return board;
+  }
+
   private void simulateRound(State state) {
     Action action;
     Player actor;
@@ -295,7 +359,11 @@ public class IntentAgent implements Agent {
       id = (self.id + move) % numPlayers;
       actor = players[id];
       action = currentState.getPreviousAction(actor.id);
-      applyAction(action, actor);
+      try {
+        applyAction(action, actor);
+      } catch (IllegalActionException e) {
+        System.err.println(e);
+      }
     }
   }
 
@@ -318,6 +386,8 @@ public class IntentAgent implements Agent {
     
     // simulate player mindset evolution
     simulateRound(simStart);
+
+
 
     return null;
   }
