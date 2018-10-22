@@ -10,7 +10,7 @@ import java.util.ArrayList;
  * */
 public class IntentAgent implements Agent {
 
-  private static final int NUM_COLOURS = 5;
+  private static final int NUM_COLOURS = Colours.values().length;
   private static final int NUM_RANKS = 5;
   private static final int[] RANK_SPREAD = {3, 2, 2, 2, 1};
 
@@ -25,8 +25,10 @@ public class IntentAgent implements Agent {
   private State currentState;
 
   class MindState {
-    private int knownRank;
-    private Colour knownColour;
+    private boolean knowRank = false;
+    private boolean knowColor = false;
+    private int rank;
+    private Colour colour;
     private int[][] state;
 
     public MindState(int[][] potential) {
@@ -38,7 +40,8 @@ public class IntentAgent implements Agent {
     }
 
     private void rankHint(int rank) {
-      knownRank = rank;
+      knowRank = true;
+      this.rank = rank;
       for (int i = 0; i < 5; ++i) {
         for (int j = 0; j < 5; ++j) {
           if (j != rank - 1) {
@@ -49,7 +52,8 @@ public class IntentAgent implements Agent {
     }
 
     private void colourHint(Colour colour) {
-      knownColour = colour;
+      knowColour = true;
+      this.colour = colour;
       for (int i = 0; i < 5; ++i) {
         for (int j = 0; j < 5; ++j) {
           if (i != colour.ordinal()) {
@@ -67,24 +71,57 @@ public class IntentAgent implements Agent {
   enum HintType {COLOUR, RANK};
 
   class Hint {
+    private Player hintee;
     private Player hinter;
     private boolean[] targets;
     private HintType type;
     private int rank;
     private Colour colour;
 
-    public Hint(int rank, boolean[] targets, Player hinter) {
+    public Hint(int rank, boolean[] targets, Player hinter, Player hintee) {
       type = HintType.RANK;
       this.rank = rank;
       this.targets = targets;
       this.hinter = hinter;
+      this.hintee = hintee;
     }
 
-    public Hint(Colour colour, boolean[] targets, Player hinter) {
+    public Hint(Colour colour, boolean[] targets, Player hinter, Player hintee) {
       type = HintType.COLOUR;
       this.colour = colour;
       this.targets = targets;
       this.hinter = hinter;
+      this.hintee = hintee;
+    }
+
+    private boolean colourValid() {
+      for (int i = 0; i < handSize; i++) {
+        if (targets[i]) {
+          if (hintee.hand[i].getColour() != colour) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    private boolean rankValid() {
+      for (int i = 0; i < handSize; i++) {
+        if (targets[i]) {
+          if (hintee.hand[i].getValue() != rank) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    public boolean isValid() {
+      if (type == HintType.COLOUR) {
+        return this.colourValid();
+      } else {
+        return this.rankValid();
+      }
     }
   }
 
@@ -92,7 +129,8 @@ public class IntentAgent implements Agent {
     private int id;
     private String name;
     private boolean trustworthy = true;
-    private double intentional = 0.5;
+    private double hintIntentional = 0.5;
+    private double playIntentional = 0.5;
     private Card[] hand;
     private MindState[] mind;
     private int[][] potential;
@@ -185,10 +223,9 @@ public class IntentAgent implements Agent {
     }
     
     // apply moves since game start
-    for (int move = 0; move < numPlayers; move++) {
-      id = (self.id + move) % numPlayers;
-      actor = players[id];
-      action = currentState.getPreviousAction(actor.id);
+    for (int move = 0; move < self.id; move++) {
+      actor = players[move];
+      action = currentState.getPreviousAction(move);
       try {
         applyAction(action, actor);
       } catch (IllegalActionException e) {
@@ -268,40 +305,147 @@ public class IntentAgent implements Agent {
     }
   }
 
+  private int highestPotentialRankByColour(Colour colour, Player actor) {
+    int highRank = -1;
+    for (int i = 0; i < NUM_RANKS; i++) {
+      if (actor.potential[colour.ordinal()][i] > 0) highRank = i;
+    }
+
+    return highRank;
+  }
+
+  private boolean colourHintPlayable(Hint hint, int[] board) {
+    for (int i = 0; i < handSize; i++) {
+      if (hint.targets[i]) {
+        if (board[hint.colour.ordinal()] == hint.hintee.hand[i].rank + 1) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private boolean colourUseless(Hint hint, int[] board) {
+    int col = hint.colour.ordinal();
+    int top = board[col];
+    int[] potential = hint.hintee.potential[col];
+    int remain = 0;
+
+    for (int i = top; i < NUM_RANKS; i++) {
+      remain += potential[i];
+    }
+
+    return (remain == 0);
+  }
+
   private void applyColourHint(Action action, Player actor, State result) throws IllegalActionException{
-    Hint hint = new Hint(action.getColour(), action.getHintedCards(), actor);
-    Player hintee = players[action.getHintReciever()]
+    Colour colour = action.getColour();
+    boolean[] targets = action.getHintedCards();
+    Hint hint = new Hint(colour, targets, actor);
+    Player hintee = players[action.getHintReciever()];
+
     int[] board = checkBoard(result);
 
     // discard hints from untrustworthy sources
-    if (!actor.trustworthy) return;
+    if (!actor.trustworthy) {
+      return;
+    }
 
-    // assume hints directed at agent are valid
+    // must otherwise assume hints directed to agent are valid
     if (hintee == self) {
       self.hints.add(hint);
-    } else {
-      // check validity
-      for (int i = 0; i < hint.targets.length; i++) {
-        if ((hint.targets[i]) && (hintee.hand[i].getColour() != hint.colour)) {
-          // hint invalid, source untrustworthy
-          actor.intentional = 0.0;
-          actor.trustworthy = false;
-          return;
-        }
+    } else if (hint.isValid()) { // other hints can be evaluated
+      hintee.hints.add(hint);
+          // rate intentionality
+      if (colourHintPlayable(hint, board)) {
+        actor.hintIntentional += 1.0; // immediately playable
+      } else if (colourUseless(hint, board)) {
+        actor.hintIntentional += 1.0; // immediately discardable
+      } else {
+        actor.hintIntentional += 0.5; // unsure
       }
-      // rate intentionality of hinter
-      for (int i = 0; i < hint.targets.length; i++) {
-        if ((hint.targets[i]) && (hintee.hand[i].rank == board[hint.colour.ordinal()] + 1)) {
-          actor.intentional += 1.0;
-          actor.intentional /= 2.0;
-        } else if ()
+      actor.hintIntentional /= 2.0;
+    } else {
+      actor.trustworthy = false; // mark known bad actors
+      return;
+    }
 
+    // apply hint
+    for (int i = 0; i < handSize; i++) {
+      if (hint.targets[i]) {
+        hintee.mind[i].colourHint(colour);
       }
     }
   }
 
-  private void applyRankHint(Action action, Player actor, State result) throws IllegalActionException {
+  private boolean rankHintPlayable(Hint hint, int[] board) {
+    int rank = hint.getValue();
+    int col;
+    
+    for (int i = 0; i < handSize; i++) {
+      if (hint.targets[i]) {
+        col = hintee.hand[i].colour.ordinal()
+        if (board[col] != rank - 1) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
 
+  private boolean rankUseless(Hint hint, int[] board) {
+    int rank = hint.getValue();
+    int col;
+    
+    for (Colour colour : colours.values()) {
+      col = colour.ordinal();
+      if (board[col] >= rank) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private void applyRankHint(Action action, Player actor, State result) throws IllegalActionException {
+    int rank = action.getValue();
+    boolean[] targets = action.getHintedCards();
+    Hint hint = new Hint(colour, targets, actor);
+    Player hintee = players[action.getHintReciever()];
+
+    int[] board = checkBoard(result);
+
+    // discard hints from untrustworthy sources
+    if (!actor.trustworthy) {
+      return;
+    }
+
+    // must assume hints directed to agent are valid
+    if (hintee == self) {
+      self.hints.add(hint);
+    } else if (hint.isValid()) { // other hints can be evaluated
+      hintee.hints.add(hint);
+      
+      // rate intentionality
+      if (rankHintPlayable(hint, board)) {
+        actor.hintIntentional += 1.0; // immediately playable
+      } else if (rankUseless(hint, board)) {
+        actor.hintIntentional += 1.0; // immediately discardable
+      } else {
+        actor.hintIntentional += 0.5; // unsure
+      }
+      actor.hintIntentional /= 2.0;
+    } else {
+      actor.trustworthy = false; // mark known bad actors
+      return;
+    }
+
+    // apply hint
+    for (int i = 0; i < handSize; i++) {
+      if (hint.targets[i]) {
+        hintee.mind[i].rankHint(rank);
+      }
+    }
   }
 
   private void applyAction(Action action, Player actor) throws IllegalActionException {
@@ -367,6 +511,90 @@ public class IntentAgent implements Agent {
     }
   }
 
+  private double probSafety(MindState mind) {
+    int[] board = checkBoard(currentState);
+    int safe = 0;
+    int total = 0;
+    int possible;
+    double prob = 0.0;
+
+    for (int col = 0; col < NUM_COLOURS; col++) {
+      for (int rank = 0; rank < NUM_RANKS; rank++) {
+        possible = mind.state[col][rank];
+        if (possible > 0) {
+          total += possible;
+          if (board[col] + 1 == rank) {
+            safe += possible;
+          }
+        }
+      }
+    }
+
+    return ((double) total) / ((double) safe);
+  }
+
+
+  private List<Action> probablySafePlays(double safety) {
+    List<Action> result = new ArrayList<Action>();
+    Action action;
+    MindState mind;
+    double prob;
+
+    for (int i = 0; i < handSize; i++) {
+      mind = self.mind[i];
+      if (probSafety(mind) > safety) {
+        action = new Action(self.id, self.name, ActionType.PLAY, i);
+        result.add(action);
+      }
+    }
+
+    return result;
+  }
+
+  private List<Player> cardHinters(int handPos) {
+    List<Player> hinters = new ArrayList<Player>();
+    
+    for (Hint hint : self.hints) {
+      hinters.add(hint.hinter);
+    }
+
+    return hinters;
+  }
+
+  private List<Action> intentionalHintPlays(double safety, double intentionality) {
+    List<Action> result = new ArrayList<Action>();
+    List<Action> plays = probablySafePlays(safety);
+    List<Player> hinters;
+
+    for (Action play : plays) {
+      hinters = cardHinters(play.getCard());
+      for (Player hinter : hinters) {
+        if (hinter.hintIntentional >= intentionality) {
+          result.add(play);
+        }
+      }
+    }
+    return result;
+  }
+
+  private intentionalTells()
+
+  private Action chooseAction() {
+    List<Action> valid;
+    Action chosen;
+
+    valid = probablySafePlays(0.99);
+    if (valid.isEmpty()) valid = intentionalHintPlays(0.6, 0.8);
+    if (valid.isEmpty()) valid = probablySafePlays(0.6);
+    if (valid.isEmpty()) valid = uselessDiscards();
+    if (valid.isEmpty()) valid = intentionalTells(0.8);
+    if (valid.isEmpty()) valid = usefulTells();
+    if (valid.isEmpty()) valid = uselessTells();
+    if (valid.isEmpty()) valid = randomDiscards();
+
+
+  }
+
   /**
    * Given the state, return the action that the strategy chooses for this state.
    * @return the action the agent chooses to perform
@@ -387,9 +615,8 @@ public class IntentAgent implements Agent {
     // simulate player mindset evolution
     simulateRound(simStart);
 
-
-
-    return null;
+    // select appropriate action
+    return chooseAction();
   }
 }
 
