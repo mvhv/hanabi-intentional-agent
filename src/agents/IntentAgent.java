@@ -2,22 +2,23 @@ package agents;
 
 import hanabAI.*;
 import java.util.Arrays;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.Random;
+import java.util.List;
 
 /**
  * An interface for representing the strategy of a player in Hanabi
  * */
 public class IntentAgent implements Agent {
 
-  private static final int NUM_COLOURS = Colours.values().length;
+  private static final int NUM_COLOURS = Colour.values().length;
   private static final int NUM_RANKS = 5;
   private static final int[] RANK_SPREAD = {3, 2, 2, 2, 1};
 
   private static int handSize;
   private static int numPlayers;
 
-  private int[][] cardsAvaliable;
+  private int[][] allUnplayed;
   private Player[] players;
   private Player self;
   private boolean firstAction = true;
@@ -26,7 +27,7 @@ public class IntentAgent implements Agent {
 
   class MindState {
     private boolean knowRank = false;
-    private boolean knowColor = false;
+    private boolean knowColour = false;
     private int rank;
     private Colour colour;
     private int[][] state;
@@ -39,7 +40,7 @@ public class IntentAgent implements Agent {
       }
     }
 
-    private void rankHint(int rank) {
+    public void rankHint(int rank) {
       knowRank = true;
       this.rank = rank;
       for (int i = 0; i < 5; ++i) {
@@ -51,7 +52,7 @@ public class IntentAgent implements Agent {
       }
     }
 
-    private void colourHint(Colour colour) {
+    public void colourHint(Colour colour) {
       knowColour = true;
       this.colour = colour;
       for (int i = 0; i < 5; ++i) {
@@ -63,9 +64,40 @@ public class IntentAgent implements Agent {
       }
     }
 
-    private void remove(int colour, int rank) {
-      if (state[colour][rank] > 0) state[colour][rank]--;
+    public boolean isUseless(int[] board, int[][] allUnplayed) {
+      int col, top;
+      int count = 0;
+
+      // for each card check mind state against the board
+      for (Colour colour : Colour.values()) {
+        col = colour.ordinal();
+        top = board[col];
+
+        // check for potential of higher rank
+        for (int rank = top + 1; rank > NUM_RANKS; rank++) {
+          // break early if colour chain dead
+          if (allUnplayed[col][rank] < 0) {
+            break;
+          } else {
+            count += state[col][rank];
+          }
+        }
+      }
+
+      // card useless if higher ranks have been ruled out
+      if (count > 0) {
+        return false;
+      } else {
+        return true;
+      }
     }
+
+    public void remove(int colour, int rank) {
+      if (state[colour][rank] > 0) {
+        state[colour][rank]--;
+      }
+    }
+
   }
 
   enum HintType {COLOUR, RANK};
@@ -136,7 +168,7 @@ public class IntentAgent implements Agent {
     private int[][] potential;
     private List<Hint> hints;
 
-    public Player(int playerID, int agentID, int handSize, int[][] cardsAvaliable, State state) {
+    public Player(int playerID, int agentID, int handSize, int[][] allUnplayed, State state) {
       id = playerID;
       name = state.getPlayers()[id];
       if (id != agentID) {
@@ -146,7 +178,7 @@ public class IntentAgent implements Agent {
       // init potential
       potential = new int[5][];
       for (int i = 0; i < 5; ++i) {
-        potential[i] = Arrays.copyOf(cardsAvaliable[i], NUM_RANKS);
+        potential[i] = Arrays.copyOf(allUnplayed[i], NUM_RANKS);
       }
 
       // init default mindstates
@@ -196,16 +228,16 @@ public class IntentAgent implements Agent {
     }
 
     // init avaliable cards i.e. any not yet discarded or played
-    cardsAvaliable = new int[NUM_COLOURS][];
+    allUnplayed = new int[NUM_COLOURS][];
     for (int i = 0; i < NUM_RANKS; ++i) {
-      cardsAvaliable[i] = Arrays.copyOf(RANK_SPREAD, NUM_RANKS);
+      allUnplayed[i] = Arrays.copyOf(RANK_SPREAD, NUM_RANKS);
     }
 
     // init player models
     id = currentState.getNextPlayer();
     players = new Player[numPlayers];
     for (int i = 0; i < numPlayers; ++i) {
-      players[i] = new Player(i, id, handSize, cardsAvaliable, currentState);
+      players[i] = new Player(i, id, handSize, allUnplayed, currentState);
     }
 
     // mark agents internal model
@@ -280,7 +312,7 @@ public class IntentAgent implements Agent {
     int rank = card.getValue();
 
     // mark card used
-    cardsAvaliable[colour][rank]--;
+    allUnplayed[colour][rank]--;
     actor.potential[colour][rank]--;
 
     // if game is over we can't pick up
@@ -317,7 +349,7 @@ public class IntentAgent implements Agent {
   private boolean colourHintPlayable(Hint hint, int[] board) {
     for (int i = 0; i < handSize; i++) {
       if (hint.targets[i]) {
-        if (board[hint.colour.ordinal()] == hint.hintee.hand[i].rank + 1) {
+        if (board[hint.colour.ordinal()] == hint.hintee.hand[i].getValue() + 1) {
           return true;
         }
       }
@@ -328,11 +360,11 @@ public class IntentAgent implements Agent {
   private boolean colourUseless(Hint hint, int[] board) {
     int col = hint.colour.ordinal();
     int top = board[col];
-    int[] potential = hint.hintee.potential[col];
+    MindState mind = hint.hintee.mind[col];
     int remain = 0;
 
-    for (int i = top; i < NUM_RANKS; i++) {
-      remain += potential[i];
+    for (int rank = top; rank < NUM_RANKS; rank++) {
+      remain += mind.state[col][rank];
     }
 
     return (remain == 0);
@@ -341,8 +373,8 @@ public class IntentAgent implements Agent {
   private void applyColourHint(Action action, Player actor, State result) throws IllegalActionException{
     Colour colour = action.getColour();
     boolean[] targets = action.getHintedCards();
-    Hint hint = new Hint(colour, targets, actor);
-    Player hintee = players[action.getHintReciever()];
+    Player hintee = players[action.getHintReceiver()];
+    Hint hint = new Hint(colour, targets, actor, hintee);
 
     int[] board = checkBoard(result);
 
@@ -379,12 +411,12 @@ public class IntentAgent implements Agent {
   }
 
   private boolean rankHintPlayable(Hint hint, int[] board) {
-    int rank = hint.getValue();
+    int rank = hint.rank;
     int col;
     
     for (int i = 0; i < handSize; i++) {
       if (hint.targets[i]) {
-        col = hintee.hand[i].colour.ordinal()
+        col = hint.hintee.hand[i].getColour().ordinal();
         if (board[col] != rank - 1) {
           return false;
         }
@@ -394,10 +426,10 @@ public class IntentAgent implements Agent {
   }
 
   private boolean rankUseless(Hint hint, int[] board) {
-    int rank = hint.getValue();
+    int rank = hint.rank;
     int col;
     
-    for (Colour colour : colours.values()) {
+    for (Colour colour : Colour.values()) {
       col = colour.ordinal();
       if (board[col] >= rank) {
         return true;
@@ -408,10 +440,11 @@ public class IntentAgent implements Agent {
   }
 
   private void applyRankHint(Action action, Player actor, State result) throws IllegalActionException {
+    Colour colour = action.getColour();
     int rank = action.getValue();
     boolean[] targets = action.getHintedCards();
-    Hint hint = new Hint(colour, targets, actor);
-    Player hintee = players[action.getHintReciever()];
+    Player hintee = players[action.getHintReceiver()];
+    Hint hint = new Hint(colour, targets, actor, hintee);
 
     int[] board = checkBoard(result);
 
@@ -479,8 +512,8 @@ public class IntentAgent implements Agent {
   private int[] checkBoard(State state) {
     int[] board = new int[NUM_COLOURS];
 
-    for (Colour color : Colours.values()) {
-      board[color.ordinal()] = state.getFirework(color).peek();
+    for (Colour colour : Colour.values()) {
+      board[colour.ordinal()] = state.getFirework(colour).peek().getValue();
     }
 
     return board;
@@ -543,15 +576,19 @@ public class IntentAgent implements Agent {
     for (int i = 0; i < handSize; i++) {
       mind = self.mind[i];
       if (probSafety(mind) > safety) {
-        action = new Action(self.id, self.name, ActionType.PLAY, i);
-        result.add(action);
+        try {
+          action = new Action(self.id, self.name, ActionType.PLAY, i);
+          result.add(action);
+        } catch (IllegalActionException e) {
+          System.err.println(e);
+        }
       }
     }
 
     return result;
   }
 
-  private List<Player> cardHinters(int handPos) {
+  private List<Player> getCardHinters(int handPos) {
     List<Player> hinters = new ArrayList<Player>();
     
     for (Hint hint : self.hints) {
@@ -562,37 +599,167 @@ public class IntentAgent implements Agent {
   }
 
   private List<Action> intentionalHintPlays(double safety, double intentionality) {
-    List<Action> result = new ArrayList<Action>();
+    List<Action> intentPlays = new ArrayList<Action>();
     List<Action> plays = probablySafePlays(safety);
     List<Player> hinters;
 
     for (Action play : plays) {
-      hinters = cardHinters(play.getCard());
-      for (Player hinter : hinters) {
-        if (hinter.hintIntentional >= intentionality) {
-          result.add(play);
+      try {
+        hinters = getCardHinters(play.getCard());
+        for (Player hinter : hinters) {
+          if (hinter.hintIntentional >= intentionality) {
+            intentPlays.add(play);
+          }
+        }
+      } catch (IllegalActionException e) {
+        System.err.println(e);
+      }
+    }
+
+    // if no intentional plays found, and fuses remaining then attempt risky move
+    if ((intentPlays.isEmpty()) && (currentState.getFuseTokens() > 1)) {
+      return plays;
+    } else {
+      return intentPlays;
+    }
+  }
+
+  private List<Action> intentionalTells(double intentionality) {
+    List<Action> tells = new ArrayList<Action>(); 
+    Action tell;
+    MindState mind;
+    int col, count;
+    boolean[] targets;
+    Hint hint;
+    int[] board = checkBoard(currentState);
+
+    // for each player
+    for (Player player : players) {
+
+      // for each colour
+      targets = new boolean[NUM_COLOURS];
+      for (Colour colour : Colour.values()) {
+        col = colour.ordinal();
+        Arrays.fill(targets, false);
+
+        // check hand
+        count = 0;
+        for (int pos = 0; pos < handSize; pos++) {
+          if (player.hand[pos].getColour() == colour) {
+            targets[pos] = true;
+            // only count unknowns or hint is pointless
+            if (!player.mind[pos].knowColour) {
+              count += 1;
+            }
+          }
+        }
+
+        // dont give negative or useless hints
+        if (count == 0) continue;
+
+        // check hint and store if useful
+        hint = new Hint(colour, targets, self, player);
+        if (colourUseless(hint, board) || colourHintPlayable(hint, board)) {
+          try {
+            tell = new Action(self.id, self.name, ActionType.HINT_COLOUR, player.id, targets, colour);
+            tells.add(tell);
+          } catch (IllegalActionException e) {
+            System.err.println(e);
+          }
+        }
+      }
+
+      // for each rank
+      targets = new boolean[NUM_RANKS];
+      for (int rank = 0; rank > NUM_RANKS; rank++) {
+        Arrays.fill(targets, false);
+
+        // check hand
+        count = 0;
+        for (int pos = 0; pos < handSize; pos++) {
+          if (player.hand[pos].getValue() == rank) {
+            targets[pos] = true;
+            // only count unknowns or hint is pointless
+            if (!player.mind[pos].knowRank) {
+              count += 1;
+            }
+          }
+        }
+
+        // dont give negative or useless hints
+        if (count == 0) continue;
+
+        // check hint and store if useful
+        hint = new Hint(rank, targets, self, player);
+        if (rankUseless(hint, board) || rankHintPlayable(hint, board)) {
+          try {
+            tell = new Action(self.id, self.name, ActionType.HINT_VALUE, player.id, targets, rank);
+            tells.add(tell);
+          } catch (IllegalActionException e) {
+            System.err.println(e);
+          }
         }
       }
     }
-    return result;
+
+    return tells;
   }
 
-  private intentionalTells()
+  private List<Action> uselessDiscards() {
+    List<Action> discards = new ArrayList<Action>();
+    Action discard;
+    MindState mind;
+    int[] board = checkBoard(currentState);
+
+    // for each card check mind state
+    for (int pos = 0; pos < handSize; pos++) {
+      mind = self.mind[pos];
+
+      if (mind.isUseless(board, allUnplayed)) {
+        try {
+          discard = new Action(self.id, self.name, ActionType.DISCARD, pos);
+          discards.add(discard);
+        } catch (IllegalActionException e) {
+          System.err.println(e);
+        }
+      }
+    }
+
+    return discards;
+  }
+
+  private List<Action> randomDiscards() {
+    List<Action> discards = new ArrayList<Action>();
+    Action discard;
+
+    for (int pos = 0; pos < handSize; pos++) {
+      try {
+        discard = new Action(self.id, self.name, ActionType.DISCARD, pos);
+        discards.add(discard);
+      } catch (IllegalActionException e) {
+        System.err.println(e);
+      }
+    }
+
+    return discards;
+  }
 
   private Action chooseAction() {
     List<Action> valid;
     Action chosen;
 
+    // modified Van den Bergh selection order
     valid = probablySafePlays(0.99);
     if (valid.isEmpty()) valid = intentionalHintPlays(0.6, 0.8);
-    if (valid.isEmpty()) valid = probablySafePlays(0.6);
     if (valid.isEmpty()) valid = uselessDiscards();
     if (valid.isEmpty()) valid = intentionalTells(0.8);
-    if (valid.isEmpty()) valid = usefulTells();
-    if (valid.isEmpty()) valid = uselessTells();
     if (valid.isEmpty()) valid = randomDiscards();
 
+    // pick a random action from 
+    Random prng = new Random();
+    chosen = valid.get(prng.nextInt(valid.size()));
 
+    return chosen;
   }
 
   /**
