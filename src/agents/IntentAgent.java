@@ -373,7 +373,11 @@ public class IntentAgent implements Agent {
       hints = new ArrayList<Hint>();
     }
 
-    /** */
+    /**
+     * Removes the specified card from this players knowledge of potential
+     * states, and the mind states of each card.
+     * @param card the card to remove
+     */
     private void removeFromMind(Card card) {
       int colour = card.getColour().ordinal();
       int rank = getRank(card);
@@ -384,14 +388,20 @@ public class IntentAgent implements Agent {
       }
     }
 
+    /**
+     * Resets the mind state of the card at the specified position and
+     * reinitialises it with the player's baseline knowledge. Unique nowledge
+     * of card state must be reset after play/discard.
+     * @param handPos
+     */
     public void resetCardState(int handPos) {
       mind[handPos] = new MindState(potential);
       removeHints(handPos);
     }
 
     /**
-     * Updates all hints to remove reference to the supplied card.
-     * For invalidating hints to old cards after play/discard.
+     * Updates all hints to remove reference to the supplied card. For
+     * invalidating hints to old cards after play/discard.
      * @param handPos the index of the card
      */
     private void removeHints(int handPos) {
@@ -465,6 +475,11 @@ public class IntentAgent implements Agent {
     }
   }
 
+  /**
+   * Returns the state with the target order if it exists.
+   * @param targetOrder the order of the desired state
+   * @return the state with the target order
+   */
   private State getPastStateByOrder(int targetOrder) {
     State target = currentState;
 
@@ -474,6 +489,11 @@ public class IntentAgent implements Agent {
     return target;
   }
 
+  /**
+   * Returns the card during the last action before the provided state. 
+   * @param result the result state
+   * @return the card played
+   */
   private Card getCardPlayed(State result) {
     int prev, curr;
 
@@ -490,7 +510,16 @@ public class IntentAgent implements Agent {
     return result.getDiscards().peek();
   }
 
-  private void applyDiscard(Action action, Player actor, State result) throws IllegalActionException {
+  /**
+   * Simulates the application of a discard and updates player models
+   * accordingly.
+   * @param action the discard action
+   * @param actor the actor peforming the discard
+   * @param result the state following the discard
+   * @throws IllegalActionException
+   */
+  private void applyDiscard(Action action, Player actor, State result)
+      throws IllegalActionException {
     int handPos = action.getCard();
     Card card = result.getDiscards().peek();
 
@@ -498,7 +527,15 @@ public class IntentAgent implements Agent {
     replaceCard(actor, card, handPos, result);
   }
 
-  private void applyPlay(Action action, Player actor, State result) throws IllegalActionException {
+  /**
+   * Simulates the application of a play and updates player models accordingly.
+   * @param action the play action
+   * @param actor the actor performing the play
+   * @param result the state following the play
+   * @throws IllegalActionException
+   */
+  private void applyPlay(Action action, Player actor, State result)
+      throws IllegalActionException {
     int handPos = action.getCard();
     Card card = getCardPlayed(result);
 
@@ -506,6 +543,14 @@ public class IntentAgent implements Agent {
     replaceCard(actor, card, handPos, result);
   }
 
+  /**
+   * Simulates new card pickup after a play or discard action and updates
+   * player models accordingly
+   * @param actor the actor that performed the action
+   * @param card the card that was played/discarded
+   * @param handPos the
+   * @param result
+   */
   private void replaceCard(Player actor, Card card, int handPos, State result) {
     int colour = card.getColour().ordinal();
     int rank = getRank(card);
