@@ -1,6 +1,5 @@
 package hanabAI;
 
-
 /**
  * A class for running a single game of Hanabi.
  * An array of 2-5 agents is provided, a deal is initialised and players takes turns until the game ends and the score is reported.
@@ -15,7 +14,7 @@ public class Hanabi{
   /**
    * Initilaises the game.
    * @throws IllegalArgumentException if there are not the right number of player
-   * */ 
+   */ 
   public Hanabi(Agent[] agents) throws IllegalArgumentException{
     //check agents between 2 and 5
     players = agents;
@@ -29,7 +28,7 @@ public class Hanabi{
    * Plays the game.
    * The agents will execute their strategies until the game is complete and a number is returned.
    * @return the score for the game
-   **/
+   */
   public int play(){
     try{
       while(!state.gameOver()){
@@ -80,7 +79,8 @@ public class Hanabi{
    * The agent implementations should be in the default package.
    * */
   public static void main(String[] args){
-    Agent[] agents = {new agents.BasicAgent(),new agents.BasicAgent(), new agents.BasicAgent(), new agents.BasicAgent(), new agents.BasicAgent()};
+    //Agent[] agents = {new agents.IntentAgent(),new agents.BasicAgent(), new agents.BasicAgent(), new agents.BasicAgent(), new agents.BasicAgent()};
+    Agent[] agents = {new agents.IntentAgent(), new agents.IntentAgent(), new agents.IntentAgent(), new agents.IntentAgent(), new agents.IntentAgent()};
     Hanabi game= new Hanabi(agents);
     StringBuffer log = new StringBuffer("A simple game for three basic agents:\n");
     int result = game.play(log);

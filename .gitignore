@@ -6,3 +6,4 @@ src/agents/ModelAgent*
 build.sh
 #ignore the doc
 doc/*
+.vscode
