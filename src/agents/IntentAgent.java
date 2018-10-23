@@ -350,7 +350,8 @@ public class IntentAgent implements Agent {
      * @param allUnplayed the initial card distribution
      * @param state the initial game state
      */
-    public Player(int playerID, int agentID, int handSize, int[][] allUnplayed, State state) {
+    public Player(int playerID, int agentID, int handSize,
+        int[][] allUnplayed, State state) {
       id = playerID;
       name = state.getPlayers()[id];
       if (id != agentID) {
@@ -583,17 +584,12 @@ public class IntentAgent implements Agent {
     }
   }
 
-  /*
-  private int highestPotentialRankByColour(Colour colour, Player actor) {
-    int highRank = -1;
-    for (int i = 0; i < NUM_RANKS; i++) {
-      if (actor.potential[colour.ordinal()][i] > 0) highRank = i;
-    }
-
-    return highRank;
-  }
-  */
-
+  /**
+   * Checks if a colour hint correlates with an immediate play.
+   * @param hint the hint
+   * @param board the current state of the board
+   * @return true if a card is immediately playable, otherwise false
+   */
   private boolean colourHintPlayable(Hint hint, int[] board) {
     for (int i = 0; i < handSize; i++) {
       if (hint.targets[i]) {
@@ -605,6 +601,12 @@ public class IntentAgent implements Agent {
     return false;
   }
 
+  /**
+   * Checks if a colour hint indicates a card is useless.
+   * @param hint the hint
+   * @param board the current state of the board
+   * @return true if a card is immediately discardable, otherwise false.
+   */
   private boolean colourUseless(Hint hint, int[] board) {
     int col = hint.colour.ordinal();
     int top = board[col];
@@ -625,13 +627,21 @@ public class IntentAgent implements Agent {
     return (possible == 0);
   }
 
-  private void applyColourHint(Action action, Player actor, State result) throws IllegalActionException{
+  /**
+   * Simulates the application of a colour hint and updates player models.
+   * @param action the colour hint action
+   * @param actor the actor providing the colour hint
+   * @param state the current game state
+   * @throws IllegalActionException
+   */
+  private void applyColourHint(Action action, Player actor, State state)
+      throws IllegalActionException{
     Colour colour = action.getColour();
     boolean[] targets = action.getHintedCards();
     Player hintee = players[action.getHintReceiver()];
     Hint hint = new Hint(colour, targets, actor, hintee);
 
-    int[] board = checkBoard(result);
+    int[] board = checkBoard(state);
 
     // discard hints from untrustworthy sources
     if (!actor.trustworthy) {
@@ -665,6 +675,12 @@ public class IntentAgent implements Agent {
     }
   }
 
+  /**
+   * Checks if a rank hint correlates with an immediate play.
+   * @param hint the rank hint
+   * @param board the current state of the board
+   * @return true if hint indicates card is playable, false otherwise.
+   */
   private boolean rankHintPlayable(Hint hint, int[] board) {
     int rank = hint.rank;
     int col;
@@ -680,6 +696,12 @@ public class IntentAgent implements Agent {
     return true;
   }
 
+  /**
+   * Checks if a rank hint indicates a card is useless.
+   * @param hint the rank hint
+   * @param board the current state of the board
+   * @return true if hint a inidcates card is useless, false otherwise.
+   */
   private boolean rankUseless(Hint hint, int[] board) {
     int rank = hint.rank;
     int col;
@@ -694,13 +716,21 @@ public class IntentAgent implements Agent {
     return false;
   }
 
-  private void applyRankHint(Action action, Player actor, State result) throws IllegalActionException {
+  /**
+   * Simulates the application of a rank hint and updates player models
+   * accordingly.
+   * @param action the rank hint action
+   * @param actor the player giving the hint
+   * @param state the current game state
+   * @throws IllegalActionException
+   */
+  private void applyRankHint(Action action, Player actor, State state) throws IllegalActionException {
     int rank = getRank(action);
     boolean[] targets = action.getHintedCards();
     Player hintee = players[action.getHintReceiver()];
     Hint hint = new Hint(rank, targets, actor, hintee);
 
-    int[] board = checkBoard(result);
+    int[] board = checkBoard(state);
 
     // discard hints from untrustworthy sources
     if (!actor.trustworthy) {
@@ -735,6 +765,12 @@ public class IntentAgent implements Agent {
     }
   }
 
+  /**
+   * Simulates applying an action and updates player models accordingly.
+   * @param action the action to apply
+   * @param actor the actor performing the action
+   * @throws IllegalActionException
+   */
   private void applyAction(Action action, Player actor) throws IllegalActionException {
     int playOrder;
     State state;
@@ -766,8 +802,9 @@ public class IntentAgent implements Agent {
   }
 
   /**
-   * Reports the agents name
-   * */
+   * Reports the agents name.
+   * @return the agent's name string
+   */
   public String toString() {
     return "IntentAgent";
   }
@@ -800,6 +837,11 @@ public class IntentAgent implements Agent {
     return board;
   }
 
+  /**
+   * Simulates the results of all actions since the players last move,
+   * and updates player models accordingly. All actions are simulated in order
+   * so that player mind states and intentionality can be evaluated.
+   */
   private void simulateRound() {
     Action action;
     Player actor;
@@ -825,6 +867,11 @@ public class IntentAgent implements Agent {
     }
   }
 
+  /**
+   * Calculates the probability that indicated card is safe to play.
+   * @param mind the mind state relating to the card
+   * @return double in the range [0, 1] indicating the probability of safety
+   */
   private double probSafety(MindState mind) {
     int[] board = checkBoard(currentState);
     int safe = 0;
@@ -845,9 +892,15 @@ public class IntentAgent implements Agent {
       }
     }
 
+    // calculate probability
     return ((double) safe) / ((double) total);
   }
 
+  /**
+   * Returns a list containing the action relating to the single safest play
+   * from the agent's hand.
+   * @return a list containing the safest play action
+   */
   private List<Action> safestPlay() {
     List<Action> result = new ArrayList<Action>();
     Action safest = null;
@@ -874,6 +927,12 @@ public class IntentAgent implements Agent {
     return result;
   }
 
+  /**
+   * Returns a list containing all play actions that meet the minimum
+   * probability of safety.
+   * @param safety the minimum probability
+   * @return a list containing the play actions
+   */
   private List<Action> probablySafePlays(double safety) {
     List<Action> result = new ArrayList<Action>();
     Action action;
@@ -894,6 +953,12 @@ public class IntentAgent implements Agent {
     return result;
   }
 
+  /**
+   * Returns a list of all players that previously hinted information about
+   * the indicated card.
+   * @param handPos the position of the card in the agents hand
+   * @return the list of all hinting players
+   */
   private List<Player> getCardHinters(int handPos) {
     List<Player> hinters = new ArrayList<Player>();
     
@@ -904,7 +969,18 @@ public class IntentAgent implements Agent {
     return hinters;
   }
 
-  private List<Action> intentionalHintPlays(double safety, double intentionality) {
+  /**
+   * Returns a list of all plays that meet a lower standard of safety given
+   * that they were hinted by players regarded as intentional. If no hints
+   * are intentional then risky plays will be returned if enough fuse tokens
+   * remain.
+   * @param safety the minimum threshold for safety
+   * @param intentionality the minimum threshold for a player to be considered
+   * intentional
+   * @return
+   */
+  private List<Action> intentionalHintPlays(double safety,
+      double intentionality) {
     List<Action> intentPlays = new ArrayList<Action>();
     List<Action> plays = probablySafePlays(safety);
     List<Player> hinters;
@@ -922,7 +998,7 @@ public class IntentAgent implements Agent {
       }
     }
 
-    // if no intentional plays found, and fuses remaining then attempt risky move
+    // if no intentional plays found, attempt risky move if fuses remain
     if ((intentPlays.isEmpty()) && (currentState.getFuseTokens() > 1)) {
       return plays;
     } else {
@@ -930,6 +1006,13 @@ public class IntentAgent implements Agent {
     }
   }
 
+  /**
+   * Returns a list of potential hints that are considered to be
+   * intentional, in that they indicate hinted cards are immediately usable
+   * in some way.
+   * @param intentionality threshold of intentionality
+   * @return the list of potential hint actions
+   */
   private List<Action> intentionalTells(double intentionality) {
     List<Action> tells = new ArrayList<Action>(); 
     Action tell;
@@ -1012,6 +1095,11 @@ public class IntentAgent implements Agent {
     return tells;
   }
 
+  /**
+   * Returns a list of discard actions if the cards are assumed to be
+   * permanently useless.
+   * @return the list of discard actions
+   */
   private List<Action> uselessDiscards() {
     List<Action> discards = new ArrayList<Action>();
     Action discard;
@@ -1040,6 +1128,10 @@ public class IntentAgent implements Agent {
     return discards;
   }
 
+  /**
+   * Returns a list of random discard actions.
+   * @return the list of discard actions
+   */
   private List<Action> randomDiscards() {
     List<Action> actions = new ArrayList<Action>();
     Action action;
@@ -1057,6 +1149,10 @@ public class IntentAgent implements Agent {
     return actions;
   }
 
+  /**
+   * Returns a list of random non-useless hint actions.
+   * @return the list of hint actions
+   */
   private List<Action> randomTells() {
     List<Action> actions = new ArrayList<Action>();
     Action action;
@@ -1065,7 +1161,6 @@ public class IntentAgent implements Agent {
     int id, card, rank;
     Colour colour;
     boolean[] targets;
-
 
     // random tell
     prng = new Random();
@@ -1120,6 +1215,11 @@ public class IntentAgent implements Agent {
     return actions;
   }
 
+  /**
+   * Uses the modified Van den Bergh selection order to choose a random
+   * action to perform from a list of potential candidate actions.
+   * @return the chosen action
+   */
   private Action chooseAction() {
     List<Action> valid;
     Action chosen;
@@ -1204,7 +1304,7 @@ public class IntentAgent implements Agent {
   /**
    * Given the state, return the action that the strategy chooses for this state.
    * @return the action the agent chooses to perform
-   * */
+   */
   public Action doAction(State state) {
     currentState = state;
     currentOrder = currentState.getOrder();
