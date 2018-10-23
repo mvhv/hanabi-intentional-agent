@@ -268,7 +268,8 @@ public class IntentAgent implements Agent {
      * @param hinter the player giving the hint
      * @param hintee the player receiving the hint
      */
-    public Hint(Colour colour, boolean[] targets, Player hinter, Player hintee) {
+    public Hint(Colour colour, boolean[] targets, Player hinter,
+        Player hintee) {
       type = HintType.COLOUR;
       this.colour = colour;
       this.targets = Arrays.copyOf(targets, targets.length);
@@ -724,7 +725,8 @@ public class IntentAgent implements Agent {
    * @param state the current game state
    * @throws IllegalActionException
    */
-  private void applyRankHint(Action action, Player actor, State state) throws IllegalActionException {
+  private void applyRankHint(Action action, Player actor, State state)
+      throws IllegalActionException {
     int rank = getRank(action);
     boolean[] targets = action.getHintedCards();
     Player hintee = players[action.getHintReceiver()];
@@ -771,12 +773,14 @@ public class IntentAgent implements Agent {
    * @param actor the actor performing the action
    * @throws IllegalActionException
    */
-  private void applyAction(Action action, Player actor) throws IllegalActionException {
+  private void applyAction(Action action, Player actor)
+      throws IllegalActionException {
     int playOrder;
     State state;
 
     // find State.order for the actors last turn relative to current order
-    playOrder = currentOrder - numPlayers + Math.floorMod(actor.id - self.id, numPlayers);
+    playOrder = currentOrder - numPlayers
+              + Math.floorMod(actor.id - self.id, numPlayers);
 
     //switch on type of action
     switch (action.getType()) {
@@ -1036,7 +1040,8 @@ public class IntentAgent implements Agent {
         // check hand
         count = 0;
         for (int pos = 0; pos < handSize; pos++) {
-          if ((player.hand[pos] != null) && (player.hand[pos].getColour() == colour)) {
+          if ((player.hand[pos] != null) &&
+              (player.hand[pos].getColour() == colour)) {
             targets[pos] = true;
             // only count unknowns or hint is pointless
             if (!player.mind[pos].knowColour) {
@@ -1052,7 +1057,8 @@ public class IntentAgent implements Agent {
         hint = new Hint(colour, targets, self, player);
         if (colourUseless(hint, board) || colourHintPlayable(hint, board)) {
           try {
-            tell = new Action(self.id, self.name, ActionType.HINT_COLOUR, player.id, targets, colour);
+            tell = new Action(self.id, self.name, ActionType.HINT_COLOUR,
+                              player.id, targets, colour);
             tells.add(tell);
           } catch (IllegalActionException e) {
             System.err.println(e);
@@ -1067,7 +1073,8 @@ public class IntentAgent implements Agent {
         // check hand
         count = 0;
         for (int pos = 0; pos < handSize; pos++) {
-          if ((player.hand[pos] != null) && (getRank(player.hand[pos]) == rank)) {
+          if ((player.hand[pos] != null) &&
+              (getRank(player.hand[pos]) == rank)) {
             targets[pos] = true;
             // only count unknowns or hint is pointless
             if (!player.mind[pos].knowRank) {
@@ -1083,7 +1090,8 @@ public class IntentAgent implements Agent {
         hint = new Hint(rank, targets, self, player);
         if (rankUseless(hint, board) || rankHintPlayable(hint, board)) {
           try {
-            tell = new Action(self.id, self.name, ActionType.HINT_VALUE, player.id, targets, rank + 1);
+            tell = new Action(self.id, self.name, ActionType.HINT_VALUE,
+                              player.id, targets, rank + 1);
             tells.add(tell);
           } catch (IllegalActionException e) {
             System.err.println(e);
@@ -1182,12 +1190,14 @@ public class IntentAgent implements Agent {
         colour = player.hand[card].getColour();
         targets = new boolean[handSize];
         for (int pos = 0; pos < handSize; pos++) {
-          if ((player.hand[pos] != null) && (player.hand[pos].getColour() == colour)) {
+          if ((player.hand[pos] != null) &&
+              (player.hand[pos].getColour() == colour)) {
             targets[pos] = true;
           }
         }
         try {
-          action = new Action(self.id, self.name, ActionType.HINT_COLOUR, player.id, targets, colour);
+          action = new Action(self.id, self.name, ActionType.HINT_COLOUR,
+                              player.id, targets, colour);
           actions.add(action);
         } catch (IllegalActionException e) {
           System.err.println(e);
@@ -1199,12 +1209,14 @@ public class IntentAgent implements Agent {
         rank = player.hand[card].getValue();
         targets = new boolean[handSize];
         for (int pos = 0; pos < handSize; pos++) {
-          if ((player.hand[pos] != null) && (player.hand[pos].getValue() == rank)) {
+          if ((player.hand[pos] != null) &&
+              (player.hand[pos].getValue() == rank)) {
             targets[pos] = true;
           }
         }
         try {
-          action = new Action(self.id, self.name, ActionType.HINT_VALUE, player.id, targets, rank);
+          action = new Action(self.id, self.name, ActionType.HINT_VALUE,
+                              player.id, targets, rank);
           actions.add(action);
         } catch (IllegalActionException e) {
           System.err.println(e);
@@ -1230,7 +1242,8 @@ public class IntentAgent implements Agent {
     valid = probablySafePlays(0.99);
 
     // if final round try anything if fuses remain
-    if ((valid.isEmpty()) && (currentState.getFinalActionIndex() > -1) && (currentState.getFuseTokens() > 1)) {
+    if ((valid.isEmpty()) && (currentState.getFinalActionIndex() > -1)
+                          && (currentState.getFuseTokens() > 1)) {
       valid = safestPlay(); 
     }
 
@@ -1302,7 +1315,8 @@ public class IntentAgent implements Agent {
   }
 
   /**
-   * Given the state, return the action that the strategy chooses for this state.
+   * Given the state, return the action that the strategy chooses for this
+   * state.
    * @return the action the agent chooses to perform
    */
   public Action doAction(State state) {
